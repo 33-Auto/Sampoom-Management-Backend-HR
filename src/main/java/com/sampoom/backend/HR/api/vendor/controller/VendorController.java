@@ -1,6 +1,8 @@
 package com.sampoom.backend.HR.api.vendor.controller;
 
 
+import com.sampoom.backend.HR.api.branch.dto.BranchResponseDTO;
+import com.sampoom.backend.HR.api.branch.dto.BranchUpdateRequestDTO;
 import com.sampoom.backend.HR.api.vendor.dto.VendorListResponseDTO;
 import com.sampoom.backend.HR.api.vendor.dto.VendorRequestDTO;
 import com.sampoom.backend.HR.api.vendor.dto.VendorResponseDTO;
@@ -12,6 +14,7 @@ import com.sampoom.backend.HR.common.response.ApiResponse;
 import com.sampoom.backend.HR.common.response.SuccessStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -33,7 +36,7 @@ public class VendorController {
     @PostMapping
     public ResponseEntity<ApiResponse<VendorResponseDTO>> createVendor(@RequestBody VendorRequestDTO dto) {
         VendorResponseDTO response = vendorService.createVendor(dto);
-        return ApiResponse.success(SuccessStatus.CREATED, response);
+        return ApiResponse.success(SuccessStatus.VENDOR_CREATED, response);
     }
 
     @Operation(summary = "거래처 수정", description = "기존 거래처 정보를 수정합니다.")
@@ -41,14 +44,15 @@ public class VendorController {
     public ResponseEntity<ApiResponse<VendorResponseDTO>> updateVendor(
             @PathVariable Long id,
             @RequestBody VendorUpdateRequestDTO dto) {
-        return ApiResponse.success(SuccessStatus.OK, vendorService.updateVendor(id, dto));
+        VendorResponseDTO response = vendorService.updateVendor(id, dto);
+        return ApiResponse.success(SuccessStatus.VENDOR_UPDATED, response);
     }
 
-    @Operation(summary = "거래처 삭제", description = "거래처를 비활성화합니다.")
+    @Operation(summary = "거래처 비활성화(삭제)", description = "거래처를 비활성화합니다.")
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteVendor(@PathVariable Long id) {
         vendorService.deleteVendor(id);
-        return ApiResponse.success(SuccessStatus.OK, null);
+        return ApiResponse.success_only(SuccessStatus.OK);
     }
 
     /**
