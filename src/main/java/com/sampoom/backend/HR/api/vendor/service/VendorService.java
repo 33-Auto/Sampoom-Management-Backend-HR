@@ -29,6 +29,7 @@ public class VendorService {
     private final VendorRepository vendorRepository;
 
     // 거래처 등록
+    @Transactional
     public VendorResponseDTO createVendor(VendorRequestDTO vendorRequestDTO) {
         String nextCode = generateNextVendorCode(vendorRequestDTO.getType());
         Vendor vendor = vendorRequestDTO.toEntity(nextCode);

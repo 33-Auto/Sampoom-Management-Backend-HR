@@ -32,9 +32,9 @@ public class VendorController {
      */
     @Operation(summary = "거래처 등록", description = "거래처 유형에 따라 코드가 자동 생성됩니다.")
     @PostMapping
-    public ResponseEntity<VendorResponseDTO> createVendor(@RequestBody VendorRequestDTO dto) {
+    public ResponseEntity<ApiResponse<VendorResponseDTO>> createVendor(@RequestBody VendorRequestDTO dto) {
         VendorResponseDTO response = vendorService.createVendor(dto);
-        return ResponseEntity.ok(response);
+        return ApiResponse.success(SuccessStatus.CREATED, response);
     }
 
     @Operation(summary = "거래처 수정", description = "기존 거래처 정보를 수정합니다.")
@@ -57,9 +57,9 @@ public class VendorController {
      */
     @Operation(summary = "거래처 전체 조회", description = "전체 거래처 목록을 조회합니다.")
     @GetMapping
-    public ResponseEntity<List<VendorListResponseDTO>> getAllVendors() {
+    public ResponseEntity<ApiResponse<List<VendorListResponseDTO>>> getAllVendors() {
         List<VendorListResponseDTO> list = vendorService.getAllVendors();
-        return ResponseEntity.ok(list);
+        return ApiResponse.success(SuccessStatus.OK, list);
     }
 
     /**
@@ -67,9 +67,9 @@ public class VendorController {
      */
     @Operation(summary = "거래처 상세 조회", description = "거래처 ID로 단건 조회합니다.")
     @GetMapping("/{id}")
-    public ResponseEntity<VendorResponseDTO> getVendor(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<VendorResponseDTO>> getVendor(@PathVariable Long id) {
         VendorResponseDTO response = vendorService.getVendor(id);
-        return ResponseEntity.ok(response);
+        return ApiResponse.success(SuccessStatus.OK, response);
     }
 
     @Operation(summary = "거래처 검색", description = "거래처 코드, 이름, 유형, 상태로 검색 및 페이징 처리합니다.")

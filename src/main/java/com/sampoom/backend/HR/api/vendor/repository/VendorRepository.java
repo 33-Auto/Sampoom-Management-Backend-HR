@@ -17,7 +17,7 @@ public interface VendorRepository extends JpaRepository<Vendor, Long> {
 
     @Query("""
         SELECT v FROM Vendor v
-        WHERE (:keyword IS NULL OR v.vendorCode LIKE %:keyword% OR v.name LIKE %:keyword%)
+        WHERE (:keyword IS NULL OR v.vendorCode ILIKE CONCAT('%', :keyword, '%') OR v.name ILIKE CONCAT('%', :keyword, '%'))
         AND (:type IS NULL OR v.type = :type)
         AND (:status IS NULL OR v.status = :status)
         ORDER BY v.createdAt DESC
