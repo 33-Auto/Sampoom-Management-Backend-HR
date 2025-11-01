@@ -6,7 +6,6 @@ import com.sampoom.backend.HR.api.vendor.dto.VendorResponseDTO;
 import com.sampoom.backend.HR.api.vendor.dto.VendorUpdateRequestDTO;
 import com.sampoom.backend.HR.api.vendor.entity.Vendor;
 import com.sampoom.backend.HR.api.vendor.entity.VendorStatus;
-import com.sampoom.backend.HR.api.vendor.entity.VendorType;
 import com.sampoom.backend.HR.api.vendor.repository.VendorRepository;
 import com.sampoom.backend.HR.common.dto.PageResponseDTO;
 import com.sampoom.backend.HR.common.exception.NotFoundException;
@@ -31,7 +30,7 @@ public class VendorService {
     // 거래처 등록
     @Transactional
     public VendorResponseDTO createVendor(VendorRequestDTO vendorRequestDTO) {
-        String nextCode = generateNextVendorCode(vendorRequestDTO.getType());
+        String nextCode = generateNextVendorCode();
         Vendor vendor = vendorRequestDTO.toEntity(nextCode);
         Vendor saved = vendorRepository.save(vendor);
         return VendorResponseDTO.from(saved);
@@ -47,6 +46,7 @@ public class VendorService {
                 dto.getName(),
                 dto.getBusinessNumber(),
                 dto.getCeoName(),
+                dto.getAddress(),
                 dto.getStatus()
         );
 
@@ -64,13 +64,11 @@ public class VendorService {
         vendorRepository.save(vendor);
     }
 
-
-
     // 거래처 조회
     @Transactional
     public VendorResponseDTO getVendor(Long id) {
         Vendor vendor = vendorRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("거래처를 찾을 수 없습니다. id=" + id));
+                .orElseThrow(() -> new NotFoundException(ErrorStatus.VENDOR_NOT_FOUND));
         return VendorResponseDTO.from(vendor);
     }
 
@@ -83,14 +81,10 @@ public class VendorService {
     }
 
     // 거래처 코드 생성
-    private String generateNextVendorCode(VendorType type) {
-        String prefix = switch (type) {
-            case CUSTOMER -> "CUST";
-            case SUPPLIER -> "SUPP";
-            case OUTSOURCE -> "OUTS";
-        };
+    private String generateNextVendorCode() {
+        String prefix = "AGC";
 
-        String lastCode = vendorRepository.findTopByTypeOrderByIdDesc(type)
+        String lastCode = vendorRepository.findTopByOrderByIdDesc()
                 .map(Vendor::getVendorCode)
                 .orElse(prefix + "-000");
 
@@ -98,11 +92,10 @@ public class VendorService {
         return String.format("%s-%03d", prefix, number);
     }
 
-    // 검색
+    // 거래처 검색
     @Transactional(readOnly = true)
     public PageResponseDTO<VendorListResponseDTO> searchVendors(
             String keyword,
-            VendorType type,
             VendorStatus status,
             int page,
             int size
@@ -111,7 +104,7 @@ public class VendorService {
 
         String searchKeyword = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
 
-        Page<Vendor> vendorPage = vendorRepository.findByFilters(searchKeyword, type, status, pageable);
+        Page<Vendor> vendorPage = vendorRepository.findByFilters(searchKeyword, status, pageable);
 
         return PageResponseDTO.<VendorListResponseDTO>builder()
                 .content(vendorPage.getContent().stream()

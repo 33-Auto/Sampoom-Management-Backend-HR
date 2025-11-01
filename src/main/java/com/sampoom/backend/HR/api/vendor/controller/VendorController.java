@@ -6,7 +6,6 @@ import com.sampoom.backend.HR.api.vendor.dto.VendorRequestDTO;
 import com.sampoom.backend.HR.api.vendor.dto.VendorResponseDTO;
 import com.sampoom.backend.HR.api.vendor.dto.VendorUpdateRequestDTO;
 import com.sampoom.backend.HR.api.vendor.entity.VendorStatus;
-import com.sampoom.backend.HR.api.vendor.entity.VendorType;
 import com.sampoom.backend.HR.api.vendor.service.VendorService;
 import com.sampoom.backend.HR.common.dto.PageResponseDTO;
 import com.sampoom.backend.HR.common.response.ApiResponse;
@@ -76,12 +75,11 @@ public class VendorController {
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<PageResponseDTO<VendorListResponseDTO>>> searchVendors(
             @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) VendorType type,
             @RequestParam(required = false) VendorStatus status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        PageResponseDTO<VendorListResponseDTO> response = vendorService.searchVendors(keyword, type, status, page, size);
+        PageResponseDTO<VendorListResponseDTO> response = vendorService.searchVendors(keyword, status, page, size);
         return ApiResponse.success(SuccessStatus.OK, response);
     }
 

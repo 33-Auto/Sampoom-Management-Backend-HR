@@ -2,7 +2,6 @@ package com.sampoom.backend.HR.api.vendor.dto;
 
 import com.sampoom.backend.HR.api.vendor.entity.Vendor;
 import com.sampoom.backend.HR.api.vendor.entity.VendorStatus;
-import com.sampoom.backend.HR.api.vendor.entity.VendorType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -16,10 +15,9 @@ import lombok.NoArgsConstructor;
 public class VendorRequestDTO {
 
     private String name;
-    private VendorType type;
     private String businessNumber;
     private String ceoName;
-
+    private String address;
     private VendorStatus status;
 //    private Long managerEmployeeId;    // 담당 직원 ID
 
@@ -27,9 +25,9 @@ public class VendorRequestDTO {
         return Vendor.builder()
                 .vendorCode(generatedCode)
                 .name(name)
-                .type(type)
                 .businessNumber(businessNumber)
                 .ceoName(ceoName)
+                .address(address)
                 .status(status != null ? status : VendorStatus.ACTIVE)
 //                .managerEmployeeId(managerEmployeeId)
                 .build();
