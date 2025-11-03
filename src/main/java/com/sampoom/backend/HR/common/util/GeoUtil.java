@@ -7,20 +7,17 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
 
-/**
- * ✅ Kakao 주소 → 위도/경도 변환 유틸
- * ✅ CodeQL 완전 통과 버전 (SSRF / ReDoS 모두 방지)
- */
+
 @Slf4j
 @Component
 public class GeoUtil {
 
-    // ✅ 화이트리스트 기반 도메인 (SSRF 방지)
     private static final String KAKAO_DOMAIN = "https://dapi.kakao.com";
-    private static final String KAKAO_ADDRESS_URL = KAKAO_DOMAIN + "/v2/local/search/address.json";
-    private static final String KAKAO_KEYWORD_URL = KAKAO_DOMAIN + "/v2/local/search/keyword.json";
+    private static final String KAKAO_ADDRESS_PATH = "/v2/local/search/address.json";
+    private static final String KAKAO_KEYWORD_PATH = "/v2/local/search/keyword.json";
 
     @Value("${kakao.api.key}")
     private String kakaoApiKey;
@@ -43,18 +40,18 @@ public class GeoUtil {
 
             HttpEntity<String> entity = new HttpEntity<>(headers);
 
-            // 1️⃣ 기본 주소로 시도
+            // 기본 주소로 시도
             double[] coords = requestAddress(rt, entity, address);
             if (isValid(coords)) return coords;
 
-            // 2️⃣ 괄호 및 특수문자 제거 후 재시도
+            // 괄호 및 특수문자 제거 후 재시도
             String simplified = normalizeAddress(address);
             if (!simplified.equals(address)) {
                 coords = requestAddress(rt, entity, simplified);
                 if (isValid(coords)) return coords;
             }
 
-            // 3️⃣ 키워드 검색으로 재시도
+            // 키워드 검색으로 재시도
             coords = requestKeyword(rt, entity, address);
             if (isValid(coords)) return coords;
 
@@ -80,7 +77,7 @@ public class GeoUtil {
     }
 
     /**
-     * 괄호 및 특수문자를 제거하는 안전한 버전 (정규식 미사용)
+     * 괄호 및 특수문자를 제거
      */
     private static String normalizeAddress(String input) {
         if (input == null || input.isBlank()) return "";
@@ -114,8 +111,13 @@ public class GeoUtil {
     /**
      * SSRF 방지: Kakao 도메인만 허용
      */
-    private static boolean isSafeKakaoUrl(String url) {
-        return url != null && url.startsWith(KAKAO_DOMAIN);
+    private static UriComponents buildSafeUri(String path, String query) {
+        // 도메인과 path를 고정하여 SSRF 불가
+        return UriComponentsBuilder
+                .fromHttpUrl(KAKAO_DOMAIN)
+                .path(path)
+                .queryParam("query", query)
+                .build(true);
     }
 
     /**
@@ -123,15 +125,8 @@ public class GeoUtil {
      */
     private static double[] requestAddress(RestTemplate rt, HttpEntity<String> entity, String query) {
         try {
-            String uri = UriComponentsBuilder.fromHttpUrl(KAKAO_ADDRESS_URL)
-                    .queryParam("query", query)
-                    .build(true)
-                    .toUriString();
-
-            if (!isSafeKakaoUrl(uri)) {
-                log.error("🚫 SSRF 차단: {}", uri);
-                return new double[]{0.0, 0.0};
-            }
+            UriComponents uriComponents = buildSafeUri(KAKAO_ADDRESS_PATH, query);
+            String uri = uriComponents.toUriString();
 
             ResponseEntity<String> res = rt.exchange(uri, HttpMethod.GET, entity, String.class);
             if (res.getStatusCode() != HttpStatus.OK) {
@@ -157,15 +152,8 @@ public class GeoUtil {
      */
     private static double[] requestKeyword(RestTemplate rt, HttpEntity<String> entity, String query) {
         try {
-            String uri = UriComponentsBuilder.fromHttpUrl(KAKAO_KEYWORD_URL)
-                    .queryParam("query", query)
-                    .build(true)
-                    .toUriString();
-
-            if (!isSafeKakaoUrl(uri)) {
-                log.error("🚫 SSRF 차단: {}", uri);
-                return new double[]{0.0, 0.0};
-            }
+            UriComponents uriComponents = buildSafeUri(KAKAO_KEYWORD_PATH, query);
+            String uri = uriComponents.toUriString();
 
             ResponseEntity<String> res = rt.exchange(uri, HttpMethod.GET, entity, String.class);
             if (res.getStatusCode() != HttpStatus.OK) {
