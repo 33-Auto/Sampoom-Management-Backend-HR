@@ -53,8 +53,8 @@ jobs:
           IMAGE="hysungzzang/sampoom"
           VER="${{ steps.ver.outputs.VERSION }}"
           echo "IMAGE=${IMAGE}" >> $GITHUB_OUTPUT
-          echo "TAG_VERSION=hr-${VER}" >> $GITHUB_OUTPUT
-          echo "TAG_LATEST=hr-latest" >> $GITHUB_OUTPUT
+          echo "TAG_VERSION=site-${VER}" >> $GITHUB_OUTPUT
+          echo "TAG_LATEST=site-latest" >> $GITHUB_OUTPUT
 
       - name: Login to Docker Hub
         if: github.event_name == 'push'
