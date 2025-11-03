@@ -10,6 +10,8 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 @Slf4j
 @Component
@@ -40,24 +42,24 @@ public class GeoUtil {
 
             HttpEntity<String> entity = new HttpEntity<>(headers);
 
-            // 기본 주소로 시도
+            // 1) 도로명/주소 검색 (address API) — analyze_type=similar 로 시도
             double[] coords = requestAddress(rt, entity, address);
             if (isValid(coords)) return coords;
 
-            // 괄호 및 특수문자 제거 후 재시도
+            // 2) 괄호 및 일부 특수문자 제거 후 재시도
             String simplified = normalizeAddress(address);
             if (!simplified.equals(address)) {
                 coords = requestAddress(rt, entity, simplified);
                 if (isValid(coords)) return coords;
             }
 
-            // 키워드 검색으로 재시도
-            coords = requestKeyword(rt, entity, address);
-            if (isValid(coords)) return coords;
+            // 3) 키워드 검색으로 시도 (keyword API) — 길이 제한 고려
+            double[] keywordCoords = requestKeyword(rt, entity, address);
+            if (isValid(keywordCoords)) return keywordCoords;
 
             if (!simplified.equals(address)) {
-                coords = requestKeyword(rt, entity, simplified);
-                if (isValid(coords)) return coords;
+                keywordCoords = requestKeyword(rt, entity, simplified);
+                if (isValid(keywordCoords)) return keywordCoords;
             }
 
             log.warn("❌ 모든 시도 실패: {}", address);
@@ -68,79 +70,104 @@ public class GeoUtil {
         return new double[]{0.0, 0.0};
     }
 
-    // ---------------------------------------------------------
-    // 🔒 내부 도우미 메서드 (모두 안전하게 작성)
-    // ---------------------------------------------------------
+    // ---------------- helper ----------------
 
     private static boolean isValid(double[] coords) {
         return coords != null && coords.length == 2 && !(coords[0] == 0.0 && coords[1] == 0.0);
     }
 
+    private static boolean isSafeQuery(String query) {
+        if (query == null || query.isBlank()) return false;
+        // 허용 문자만 통과 (한글, 영문, 숫자, 공백, 일부 문장부호)
+        return query.matches("^[가-힣a-zA-Z0-9\\s.,()\\-·]*$");
+    }
+
     /**
-     * 괄호 및 특수문자를 제거
+     * Kakao가 허용하는 최대 쿼리(원문 기준)를 맞추기 위해 UTF-8 바이트 단위로 잘라낸다.
+     * (Kakao 메세지는 'Max (query) length 100' 를 반환하므로 안전하게 100 바이트 이하로 자름)
+     */
+    private static String truncateQuery(String query) {
+        if (query == null) return "";
+        try {
+            byte[] bytes = query.getBytes(StandardCharsets.UTF_8);
+            if (bytes.length <= 100) return query;
+
+            int byteCount = 0;
+            StringBuilder sb = new StringBuilder();
+            for (char c : query.toCharArray()) {
+                int charBytes = String.valueOf(c).getBytes(StandardCharsets.UTF_8).length;
+                if (byteCount + charBytes > 100) break;
+                sb.append(c);
+                byteCount += charBytes;
+            }
+            return sb.toString().trim();
+        } catch (Exception e) {
+            log.warn("⚠️ Query truncate 중 오류: {}", e.getMessage());
+            return query.length() > 30 ? query.substring(0, 30) : query;
+        }
+    }
+
+    /**
+     * 괄호 및 일부 특수문자를 제거 (정규식 과도 사용을 피한 안전한 구현)
      */
     private static String normalizeAddress(String input) {
         if (input == null || input.isBlank()) return "";
-
         StringBuilder sb = new StringBuilder();
         int depth = 0;
-
         for (char c : input.toCharArray()) {
-            if (c == '(') {
-                depth++;
-                continue;
-            } else if (c == ')') {
-                if (depth > 0) depth--;
-                continue;
-            }
+            if (c == '(') { depth++; continue; }
+            if (c == ')') { if (depth > 0) depth--; continue; }
             if (depth == 0) sb.append(c);
         }
-
-        String result = sb.toString()
-                .replace(",", " ")
-                .replace("·", " ")
-                .trim();
-
-        while (result.contains("  ")) {
-            result = result.replace("  ", " ");
-        }
-
+        String result = sb.toString().replace(",", " ").replace("·", " ").trim();
+        while (result.contains("  ")) result = result.replace("  ", " ");
         return result;
     }
 
     /**
-     * SSRF 방지: Kakao 도메인만 허용
+     * 안전한 UriComponents 생성 (SSRF 방지 + 한글 인코딩 포함)
+     * - query: 먼저 안전성 검사 및 truncate 한 뒤 URLEncoder로 인코딩하고 build(true) 사용
      */
-    private static UriComponents buildSafeUri(String path, String query) {
-        // 도메인과 path를 고정하여 SSRF 불가
+    private static UriComponents buildSafeUri(String path, String rawQuery) {
+        if (rawQuery == null) rawQuery = "";
+        if (!isSafeQuery(rawQuery)) {
+            throw new IllegalArgumentException("Unsafe query string detected");
+        }
+
+        String truncated = truncateQuery(rawQuery);
+        log.debug("GeoUtil: truncated query='{}' ({} bytes)",
+                truncated, truncated.getBytes(StandardCharsets.UTF_8).length);
+
         return UriComponentsBuilder
                 .fromHttpUrl(KAKAO_DOMAIN)
                 .path(path)
-                .queryParam("query", query)
-                .build(true);
+                .queryParam("query", truncated)  // 원본(잘린) 문자열 그대로 전달
+                .build(false); // true = 이미 안전한 문자열로 간주
     }
 
     /**
-     * Kakao 주소검색 API 호출 (SSRF-safe)
+     * address (도로명/주소) 검색 — analyze_type=similar 추가
      */
     private static double[] requestAddress(RestTemplate rt, HttpEntity<String> entity, String query) {
         try {
-            UriComponents uriComponents = buildSafeUri(KAKAO_ADDRESS_PATH, query);
-            String uri = uriComponents.toUriString();
+            UriComponents uc = buildSafeUri(KAKAO_ADDRESS_PATH, query);
+            // analyze_type 파라미터는 원문(잘린 뒤)에 대해 추가 — encode 처리 동일하게 하려면 param 자체를 encoding해 넣음
+            String encodedAnalyze = URLEncoder.encode("similar", StandardCharsets.UTF_8);
+            String uri = uc.toUriString() + "&analyze_type=" + encodedAnalyze;
 
             ResponseEntity<String> res = rt.exchange(uri, HttpMethod.GET, entity, String.class);
             if (res.getStatusCode() != HttpStatus.OK) {
-                log.warn("⚠️ Kakao 주소검색 응답 오류: {}", res.getStatusCode());
+                log.warn("⚠️ Kakao 주소검색 응답 오류: {} (query={})", res.getStatusCode(), query);
                 return new double[]{0.0, 0.0};
             }
 
             JSONObject json = new JSONObject(res.getBody());
             JSONArray docs = json.optJSONArray("documents");
-            if (docs == null || docs.isEmpty()) return new double[]{0.0, 0.0};
+            if (docs == null || docs.length() == 0) return new double[]{0.0, 0.0};
 
             JSONObject first = docs.getJSONObject(0);
+            // Kakao returns x=lon, y=lat
             return new double[]{first.getDouble("y"), first.getDouble("x")};
-
         } catch (Exception e) {
             log.error("❌ Kakao 주소검색 중 예외 ({}): {}", query, e.getMessage());
             return new double[]{0.0, 0.0};
@@ -148,26 +175,25 @@ public class GeoUtil {
     }
 
     /**
-     * Kakao 키워드검색 API 호출 (SSRF-safe)
+     * keyword 검색 (키워드 검색 시에도 쿼리 잘라서 전달)
      */
     private static double[] requestKeyword(RestTemplate rt, HttpEntity<String> entity, String query) {
         try {
-            UriComponents uriComponents = buildSafeUri(KAKAO_KEYWORD_PATH, query);
-            String uri = uriComponents.toUriString();
+            UriComponents uc = buildSafeUri(KAKAO_KEYWORD_PATH, query);
+            String uri = uc.toUriString();
 
             ResponseEntity<String> res = rt.exchange(uri, HttpMethod.GET, entity, String.class);
             if (res.getStatusCode() != HttpStatus.OK) {
-                log.warn("⚠️ Kakao 키워드검색 응답 오류: {}", res.getStatusCode());
+                log.warn("⚠️ Kakao 키워드검색 응답 오류: {} (query={})", res.getStatusCode(), query);
                 return new double[]{0.0, 0.0};
             }
 
             JSONObject json = new JSONObject(res.getBody());
             JSONArray docs = json.optJSONArray("documents");
-            if (docs == null || docs.isEmpty()) return new double[]{0.0, 0.0};
+            if (docs == null || docs.length() == 0) return new double[]{0.0, 0.0};
 
             JSONObject first = docs.getJSONObject(0);
             return new double[]{first.getDouble("y"), first.getDouble("x")};
-
         } catch (Exception e) {
             log.error("❌ Kakao 키워드검색 중 예외 ({}): {}", query, e.getMessage());
             return new double[]{0.0, 0.0};
