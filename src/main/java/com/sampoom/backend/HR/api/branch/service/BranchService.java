@@ -52,6 +52,9 @@ public class BranchService {
             distanceService.updateDistancesForNewBranch(saved);
         }
 
+        // 창고일때만 Outbox 이벤트 발행
+        distanceService.publishBranchEventIfWarehouse(saved);
+
         return BranchResponseDTO.from(saved);
     }
 
@@ -82,6 +85,9 @@ public class BranchService {
         if (updated.getLatitude() != null && updated.getLongitude() != null) {
             distanceService.updateDistancesForNewBranch(updated);
         }
+
+        // 창고일 때만 BRANCH 이벤트 발행
+        distanceService.publishBranchEventIfWarehouse(updated);
 
         return BranchResponseDTO.from(updated);
     }
