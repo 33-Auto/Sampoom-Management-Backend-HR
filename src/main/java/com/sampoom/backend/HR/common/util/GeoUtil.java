@@ -22,11 +22,23 @@ public class GeoUtil {
     @Value("${kakao.api.key}")
     private String kakaoApiKey;
 
+    // 안전한 주소 입력 검증용 (SSRF 방지)
+    private static final Pattern ADDRESS_SAFE_PATTERN =
+            Pattern.compile("^[가-힣a-zA-Z0-9\\-\\s\\.,()·]*$");
+    private static final int ADDRESS_MAX_LENGTH = 100;
+
+    private static boolean isSafeAddressInput(String address) {
+        if (address == null || address.isBlank()) return false;
+        if (address.length() > ADDRESS_MAX_LENGTH) return false;
+        if (!ADDRESS_SAFE_PATTERN.matcher(address).matches()) return false;
+        return true;
+    }
+
     /**
      * 주소 문자열을 위도(lat), 경도(lon)로 변환
      */
     public double[] getLatLngFromAddress(String address) {
-        if (address == null || address.isBlank()) {
+        if (!isSafeAddressInput(address)) {
             log.warn(" 주소가 비어 있어 좌표 변환 불가");
             return new double[]{0.0, 0.0};
         }
@@ -38,11 +50,11 @@ public class GeoUtil {
             headers.set("Content-Type", "application/json;charset=UTF-8");
             HttpEntity<String> entity = new HttpEntity<>(headers);
 
-            // 1️⃣ 도로명 주소 검색 (유사 매칭)
+            // 도로명 주소 검색 (유사 매칭)
             double[] coords = tryAddress(rt, entity, address, true);
             if (isValid(coords)) return coords;
 
-            // 2️⃣ 괄호 내용 제거 후 다시 시도
+            // 괄호 내용 제거 후 다시 시도
             String simplified = address
                     .replaceAll("\\([^)]*\\)", " ")
                     .replaceAll("[,·]", " ")
@@ -54,8 +66,8 @@ public class GeoUtil {
                 if (isValid(coords)) return coords;
             }
 
-            // 3️⃣ 괄호 안 키워드 추출 (예: '삼정빌딩')
-            Matcher matcher = Pattern.compile("\\(([^)]*)\\)").matcher(address);
+            // 괄호 안 키워드 추출
+            Matcher matcher = Pattern.compile("\\(([^()]{0,50})\\)").matcher(address);
             if (matcher.find()) {
                 String inside = matcher.group(1).split(",")[0].trim();
                 if (!inside.isEmpty()) {
@@ -65,11 +77,11 @@ public class GeoUtil {
                 }
             }
 
-            // 4️⃣ 전체 주소를 키워드 검색으로 재시도
+            // 전체 주소를 키워드 검색으로 재시도
             coords = tryKeyword(rt, entity, address);
             if (isValid(coords)) return coords;
 
-            // 5️⃣ 정규화된 주소를 키워드 검색으로 재시도
+            // 정규화된 주소를 키워드 검색으로 재시도
             if (!simplified.equals(address)) {
                 coords = tryKeyword(rt, entity, simplified);
                 if (isValid(coords)) return coords;
