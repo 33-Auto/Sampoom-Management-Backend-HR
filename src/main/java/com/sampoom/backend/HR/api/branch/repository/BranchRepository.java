@@ -18,8 +18,8 @@ public interface BranchRepository extends JpaRepository<Branch, Long> {
     @Query("""
     SELECT b FROM Branch b
     WHERE (:keyword IS NULL 
-        OR b.branchCode LIKE CONCAT('%', CAST(:keyword AS string), '%') 
-        OR b.name LIKE CONCAT('%', CAST(:keyword AS string), '%'))
+        OR b.branchCode LIKE CONCAT('%', :keyword, '%') 
+        OR b.name LIKE CONCAT('%', :keyword, '%'))
     AND (:type IS NULL OR b.type = :type)
     AND (:status IS NULL OR b.status = :status)
     ORDER BY b.createdAt DESC

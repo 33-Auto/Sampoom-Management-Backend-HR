@@ -48,7 +48,9 @@ public class VendorService {
         Vendor saved = vendorRepository.save(vendor);
 
         // 거리 계산
-        distanceService.updateDistancesForNewVendor(saved);
+        if (saved.getLatitude() != null && saved.getLongitude() != null) {
+            distanceService.updateDistancesForNewVendor(saved);
+        }
 
         return VendorResponseDTO.from(saved);
     }
@@ -62,15 +64,24 @@ public class VendorService {
         vendor.changeInfo(dto.getName(), dto.getBusinessNumber(), dto.getCeoName(),
                 dto.getAddress(), dto.getStatus());
 
-        // ✅ 주소가 바뀌었으면 다시 위경도 계산
-        if (dto.getAddress() != null && !dto.getAddress().isBlank()) {
-            double[] coords = geoUtil.getLatLngFromAddress(dto.getAddress());
-            vendor.setLatitude(coords[0]);
-            vendor.setLongitude(coords[1]);
+        // 주소가 바뀌었으면 다시 위경도 계산
+        if (dto.getAddress() != null) {
+            String newAddress = dto.getAddress();
+            if (newAddress.isBlank()) {
+                vendor.setLatitude(null);
+                vendor.setLongitude(null);
+            } else {
+                double[] coords = geoUtil.getLatLngFromAddress(newAddress);
+                vendor.setLatitude(coords[0]);
+                vendor.setLongitude(coords[1]);
+            }
         }
 
         Vendor updated = vendorRepository.save(vendor);
-        distanceService.updateDistancesForNewVendor(updated);
+
+        if (updated.getLatitude() != null && updated.getLongitude() != null) {
+            distanceService.updateDistancesForNewVendor(updated);
+        }
 
         return VendorResponseDTO.from(updated);
     }

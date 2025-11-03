@@ -46,7 +46,8 @@ public class GeoUtil {
         try {
             RestTemplate rt = new RestTemplate();
             HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", kakaoApiKey);
+            String authHeader = kakaoApiKey.startsWith("KakaoAK ") ? kakaoApiKey : "KakaoAK " + kakaoApiKey;
+            headers.set(HttpHeaders.AUTHORIZATION, authHeader);
             headers.set("Content-Type", "application/json;charset=UTF-8");
             HttpEntity<String> entity = new HttpEntity<>(headers);
 

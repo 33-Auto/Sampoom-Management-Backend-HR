@@ -34,12 +34,13 @@ public class DistanceService {
                         vendor.getLatitude(), vendor.getLongitude()
                 );
 
-                BranchVendorDistance distanceEntity = BranchVendorDistance.builder()
-                        .branch(branch)
-                        .vendor(vendor)
-                        .distanceKm(distance)
-                        .build();
+                BranchVendorDistance distanceEntity = distanceRepository.findByBranchAndVendor(branch, vendor)
+                        .orElseGet(() -> BranchVendorDistance.builder()
+                                .branch(branch)
+                                .vendor(vendor)
+                                .build());
 
+                distanceEntity.updateDistance(distance);
                 distanceRepository.save(distanceEntity);
             }
         }
@@ -58,12 +59,13 @@ public class DistanceService {
                         vendor.getLatitude(), vendor.getLongitude()
                 );
 
-                BranchVendorDistance distanceEntity = BranchVendorDistance.builder()
-                        .branch(branch)
-                        .vendor(vendor)
-                        .distanceKm(distance)
-                        .build();
+                BranchVendorDistance distanceEntity = distanceRepository.findByBranchAndVendor(branch, vendor)
+                        .orElseGet(() -> BranchVendorDistance.builder()
+                                .branch(branch)
+                                .vendor(vendor)
+                                .build());
 
+                distanceEntity.updateDistance(distance);
                 distanceRepository.save(distanceEntity);
             }
         }
