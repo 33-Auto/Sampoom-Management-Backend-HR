@@ -23,7 +23,8 @@ public enum ErrorStatus {
 
     // 404 NOT_FOUND
     NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 리소스를 찾을 수 없습니다.",40401),
-    VENDOR_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 리소스를 찾을 수 없습니다.",40402),
+    VENDOR_NOT_FOUND(HttpStatus.NOT_FOUND, "거래처를 찾을 수 없습니다.",40402),
+    BRANCH_NOT_FOUND(HttpStatus.NOT_FOUND, "지점을 찾을 수 없습니다.",40403),
 
 
 
