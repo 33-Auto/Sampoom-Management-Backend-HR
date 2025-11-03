@@ -9,8 +9,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 @Slf4j
 @Component
@@ -19,153 +19,140 @@ public class GeoUtil {
     private static final String KAKAO_ADDRESS_URL = "https://dapi.kakao.com/v2/local/search/address.json";
     private static final String KAKAO_KEYWORD_URL = "https://dapi.kakao.com/v2/local/search/keyword.json";
 
-    @Value("${kakao.api.key}")
+    @Value("${kakao.api.key:}")
     private String kakaoApiKey;
 
-    // 안전한 주소 입력 검증용 (SSRF 방지)
-    private static final Pattern ADDRESS_SAFE_PATTERN =
-            Pattern.compile("^[가-힣a-zA-Z0-9\\-\\s\\.,()·]*$");
+    private static final String SAFE_PATTERN = "^[가-힣a-zA-Z0-9\\-\\s\\.,()·]*$";
     private static final int ADDRESS_MAX_LENGTH = 100;
 
-    // 정규식 미리 컴파일 (CodeQL의 polynomial regex 경고 방지)
-    private static final Pattern SAFE_PAREN_PATTERN = Pattern.compile("\\(([^()]{0,50})\\)");
-
-    private static boolean isSafeAddressInput(String address) {
-        if (address == null || address.isBlank()) return false;
-        if (address.length() > ADDRESS_MAX_LENGTH) return false;
-        return ADDRESS_SAFE_PATTERN.matcher(address).matches();
+    private static boolean isSafe(String input) {
+        return input != null &&
+                !input.isBlank() &&
+                input.length() <= ADDRESS_MAX_LENGTH &&
+                input.matches(SAFE_PATTERN);
     }
 
-    /**
-     * 주소 문자열을 위도(lat), 경도(lon)로 변환
-     */
+    /** 주소를 위도/경도로 변환 */
     public double[] getLatLngFromAddress(String address) {
-        if (!isSafeAddressInput(address)) {
-            log.warn(" 주소가 비어 있어 좌표 변환 불가");
+        if (!isSafe(address)) {
+            log.warn("⚠️ 주소 입력이 유효하지 않음: {}", address);
+            return new double[]{0.0, 0.0};
+        }
+
+        if (kakaoApiKey == null || kakaoApiKey.isBlank()) {
+            log.error("❌ Kakao API Key가 설정되지 않았습니다.");
             return new double[]{0.0, 0.0};
         }
 
         try {
             RestTemplate rt = new RestTemplate();
             HttpHeaders headers = new HttpHeaders();
-            String authHeader = kakaoApiKey.startsWith("KakaoAK ") ? kakaoApiKey : "KakaoAK " + kakaoApiKey;
-            headers.set(HttpHeaders.AUTHORIZATION, authHeader);
-            headers.set("Content-Type", "application/json;charset=UTF-8");
+            headers.set(HttpHeaders.AUTHORIZATION,
+                    kakaoApiKey.startsWith("KakaoAK ") ? kakaoApiKey : "KakaoAK " + kakaoApiKey);
+            headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<String> entity = new HttpEntity<>(headers);
 
-            // 도로명 주소 검색 (유사 매칭)
-            double[] coords = tryAddress(rt, entity, address, true);
-            if (isValid(coords)) return coords;
+            String encoded = URLEncoder.encode(address, StandardCharsets.UTF_8);
+            double[] coords = requestAddress(rt, entity, encoded);
+            if (valid(coords)) return coords;
 
-            // 괄호 내용 제거 후 다시 시도
-            String simplified = address
-                    .replaceAll("\\([^)]*\\)", " ")
-                    .replaceAll("[,·]", " ")
-                    .replaceAll("\\s{2,}", " ")
-                    .trim();
+            String simplified = normalizeAddress(address);
             if (!simplified.equals(address)) {
-                log.warn("⚠️ 주소 재시도(정규화): {}", simplified);
-                coords = tryAddress(rt, entity, simplified, true);
-                if (isValid(coords)) return coords;
+                log.debug("주소 재시도 (정규화): {}", simplified);
+                coords = requestAddress(rt, entity, URLEncoder.encode(simplified, StandardCharsets.UTF_8));
+                if (valid(coords)) return coords;
             }
 
-            // 괄호 안 키워드 추출
-            Matcher matcher = SAFE_PAREN_PATTERN.matcher(address);
-            if (matcher.find()) {
-                String inside = matcher.group(1).split(",")[0].trim();
-                if (!inside.isEmpty()) {
-                    log.warn("⚠️ 괄호 내부 키워드 재시도: {}", inside);
-                    coords = tryKeyword(rt, entity, inside);
-                    if (isValid(coords)) return coords;
-                }
+            String inner = extractInnerText(address);
+            if (inner != null) {
+                log.debug("괄호 내부 재시도: {}", inner);
+                coords = requestKeyword(rt, entity, URLEncoder.encode(inner, StandardCharsets.UTF_8));
+                if (valid(coords)) return coords;
             }
 
-            // 전체 주소를 키워드 검색으로 재시도
-            coords = tryKeyword(rt, entity, address);
-            if (isValid(coords)) return coords;
+            coords = requestKeyword(rt, entity, URLEncoder.encode(address, StandardCharsets.UTF_8));
+            if (valid(coords)) return coords;
 
-            // 정규화된 주소를 키워드 검색으로 재시도
             if (!simplified.equals(address)) {
-                coords = tryKeyword(rt, entity, simplified);
-                if (isValid(coords)) return coords;
+                coords = requestKeyword(rt, entity, URLEncoder.encode(simplified, StandardCharsets.UTF_8));
+                if (valid(coords)) return coords;
             }
 
-            log.warn("⚠️ 모든 시도 실패: {}", address);
-        } catch (Exception e) {
-            log.error("❌ 주소 → 좌표 변환 중 예외 ({}): {}", address, e.getMessage());
-        }
-
-        return new double[]{0.0, 0.0};
-    }
-
-    // -------------------- 내부 함수 --------------------
-
-    private static boolean isValid(double[] c) {
-        return c != null && c.length == 2 && !(c[0] == 0.0 && c[1] == 0.0);
-    }
-
-    private static double[] tryAddress(RestTemplate rt, HttpEntity<String> entity, String q, boolean similar) {
-        try {
-            String uri = UriComponentsBuilder.fromHttpUrl(KAKAO_ADDRESS_URL)
-                    .queryParam("query", q)
-                    .queryParam("analyze_type", similar ? "similar" : "exact")
-                    .build(true)
-                    .toUriString();
-
-            ResponseEntity<String> res = rt.exchange(uri, HttpMethod.GET, entity, String.class);
-            if (res.getStatusCode() != HttpStatus.OK) {
-                log.warn("⚠️ 주소검색 응답 코드: {} (q={})", res.getStatusCode(), q);
-                return new double[]{0.0, 0.0};
-            }
-
-            JSONObject json = new JSONObject(res.getBody());
-            JSONArray docs = json.getJSONArray("documents");
-            if (docs.isEmpty()) {
-                log.warn("⚠️ 주소 검색 결과 없음: {}", q);
-                return new double[]{0.0, 0.0};
-            }
-
-            JSONObject first = docs.getJSONObject(0);
-            double lon = first.getDouble("x");
-            double lat = first.getDouble("y");
-            log.info("📍 주소검색 성공: {} → 위도 {}, 경도 {}", q, lat, lon);
-            return new double[]{lat, lon};
+            log.warn("❗ 모든 변환 시도 실패: {}", address);
+            return new double[]{0.0, 0.0};
 
         } catch (Exception e) {
-            log.error("❌ 주소검색 중 오류 ({}) : {}", q, e.getMessage());
+            log.error("❌ 주소 → 좌표 변환 중 오류 [{}]: {}", address, e.getMessage());
             return new double[]{0.0, 0.0};
         }
     }
 
-    private static double[] tryKeyword(RestTemplate rt, HttpEntity<String> entity, String q) {
+    // ---------------- 내부 로직 ----------------
+
+    private static String normalizeAddress(String address) {
+        return address.replaceAll("\\([^)]*\\)", " ")
+                .replaceAll("[,·]", " ")
+                .replaceAll("\\s{2,}", " ")
+                .trim();
+    }
+
+    private static String extractInnerText(String s) {
+        int start = s.indexOf('(');
+        int end = s.indexOf(')');
+        if (start >= 0 && end > start) {
+            String inner = s.substring(start + 1, end).trim();
+            if (!inner.isEmpty()) return inner;
+        }
+        return null;
+    }
+
+    private static boolean valid(double[] c) {
+        return c != null && c.length == 2 && !(c[0] == 0.0 && c[1] == 0.0);
+    }
+
+    private static double[] requestAddress(RestTemplate rt, HttpEntity<String> entity, String encoded) {
         try {
-            String trimmed = q.length() > 90 ? q.substring(0, 90) : q; // ⚙️ 길이 제한 회피
-            String uri = UriComponentsBuilder.fromHttpUrl(KAKAO_KEYWORD_URL)
-                    .queryParam("query", trimmed)
-                    .build(true)
+            String uri = UriComponentsBuilder.fromHttpUrl(KAKAO_ADDRESS_URL)
+                    .queryParam("query", encoded)
+                    .queryParam("analyze_type", "similar")
+                    .encode()
                     .toUriString();
 
             ResponseEntity<String> res = rt.exchange(uri, HttpMethod.GET, entity, String.class);
-            if (res.getStatusCode() != HttpStatus.OK) {
-                log.warn("⚠️ 키워드검색 응답 코드: {} (q={})", res.getStatusCode(), trimmed);
-                return new double[]{0.0, 0.0};
-            }
+            if (res.getStatusCode() != HttpStatus.OK) return new double[]{0.0, 0.0};
 
-            JSONObject json = new JSONObject(res.getBody());
-            JSONArray docs = json.getJSONArray("documents");
-            if (docs.isEmpty()) {
-                log.warn("⚠️ 키워드 검색 결과 없음: {}", trimmed);
-                return new double[]{0.0, 0.0};
-            }
+            JSONObject body = new JSONObject(res.getBody());
+            JSONArray docs = body.optJSONArray("documents");
+            if (docs == null || docs.isEmpty()) return new double[]{0.0, 0.0};
 
             JSONObject first = docs.getJSONObject(0);
-            double lon = first.getDouble("x");
-            double lat = first.getDouble("y");
-            log.info("📍 키워드검색 성공: {} → 위도 {}, 경도 {}", trimmed, lat, lon);
-            return new double[]{lat, lon};
+            return new double[]{first.getDouble("y"), first.getDouble("x")};
 
         } catch (Exception e) {
-            log.error("❌ 키워드검색 중 오류 ({}) : {}", q, e.getMessage());
+            log.error("주소 API 오류: {}", e.getMessage());
+            return new double[]{0.0, 0.0};
+        }
+    }
+
+    private static double[] requestKeyword(RestTemplate rt, HttpEntity<String> entity, String encoded) {
+        try {
+            String uri = UriComponentsBuilder.fromHttpUrl(KAKAO_KEYWORD_URL)
+                    .queryParam("query", encoded)
+                    .encode()
+                    .toUriString();
+
+            ResponseEntity<String> res = rt.exchange(uri, HttpMethod.GET, entity, String.class);
+            if (res.getStatusCode() != HttpStatus.OK) return new double[]{0.0, 0.0};
+
+            JSONObject body = new JSONObject(res.getBody());
+            JSONArray docs = body.optJSONArray("documents");
+            if (docs == null || docs.isEmpty()) return new double[]{0.0, 0.0};
+
+            JSONObject first = docs.getJSONObject(0);
+            return new double[]{first.getDouble("y"), first.getDouble("x")};
+
+        } catch (Exception e) {
+            log.error("키워드 API 오류: {}", e.getMessage());
             return new double[]{0.0, 0.0};
         }
     }
