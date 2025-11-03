@@ -43,6 +43,9 @@ public class Branch extends BaseTimeEntity {
         if (status != null) this.status = status;
     }
 
+    public void setLatitude(Double latitude) { this.latitude = latitude; }
+    public void setLongitude(Double longitude) { this.longitude = longitude; }
+
     /** 지점 비활성화 */
     public void deactivate() {
         this.status = BranchStatus.INACTIVE;
