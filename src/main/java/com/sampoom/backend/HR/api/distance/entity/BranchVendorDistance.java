@@ -29,6 +29,9 @@ public class BranchVendorDistance extends BaseTimeEntity {
 
     private Double distanceKm;
 
+    @Version
+    private Long version; // 낙관적 락 & 이벤트 버전 관
+
     public void updateDistance(Double newDistance) {
         this.distanceKm = newDistance;
     }
