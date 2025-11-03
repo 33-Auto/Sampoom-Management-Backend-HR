@@ -37,7 +37,7 @@ jobs:
       - name: Create application.properties from secret
         run: |
           mkdir -p src/main/resources
-          echo "${{ secrets.APP_PROPS_HR }}" > src/main/resources/application.yml
+          echo "${{ secrets.APP_PROPS_HR }}" > src/main/resources/application.properties
 
       - name: Build hr jar
         run: ./gradlew clean bootJar -x test -Dspring.profiles.active=ci
