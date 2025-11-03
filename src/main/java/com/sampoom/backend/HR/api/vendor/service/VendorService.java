@@ -1,5 +1,6 @@
 package com.sampoom.backend.HR.api.vendor.service;
 
+import com.sampoom.backend.HR.api.distance.service.DistanceService;
 import com.sampoom.backend.HR.api.vendor.dto.VendorListResponseDTO;
 import com.sampoom.backend.HR.api.vendor.dto.VendorRequestDTO;
 import com.sampoom.backend.HR.api.vendor.dto.VendorResponseDTO;
@@ -10,6 +11,7 @@ import com.sampoom.backend.HR.api.vendor.repository.VendorRepository;
 import com.sampoom.backend.HR.common.dto.PageResponseDTO;
 import com.sampoom.backend.HR.common.exception.NotFoundException;
 import com.sampoom.backend.HR.common.response.ErrorStatus;
+import com.sampoom.backend.HR.common.util.GeoUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -26,13 +28,28 @@ import java.util.stream.Collectors;
 public class VendorService {
 
     private final VendorRepository vendorRepository;
+    private final DistanceService distanceService;
+    private final GeoUtil geoUtil;
 
     // 거래처 등록
     @Transactional
     public VendorResponseDTO createVendor(VendorRequestDTO vendorRequestDTO) {
         String nextCode = generateNextVendorCode();
+
         Vendor vendor = vendorRequestDTO.toEntity(nextCode);
+
+        // 주소로 위경도 자동 설정
+        if (vendor.getAddress() != null && !vendor.getAddress().isBlank()) {
+            double[] coords = geoUtil.getLatLngFromAddress(vendor.getAddress());
+            vendor.setLatitude(coords[0]);
+            vendor.setLongitude(coords[1]);
+        }
+
         Vendor saved = vendorRepository.save(vendor);
+
+        // 거리 계산
+        distanceService.updateDistancesForNewVendor(saved);
+
         return VendorResponseDTO.from(saved);
     }
 
@@ -42,15 +59,19 @@ public class VendorService {
         Vendor vendor = vendorRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException(ErrorStatus.VENDOR_NOT_FOUND));
 
-        vendor.changeInfo(
-                dto.getName(),
-                dto.getBusinessNumber(),
-                dto.getCeoName(),
-                dto.getAddress(),
-                dto.getStatus()
-        );
+        vendor.changeInfo(dto.getName(), dto.getBusinessNumber(), dto.getCeoName(),
+                dto.getAddress(), dto.getStatus());
+
+        // ✅ 주소가 바뀌었으면 다시 위경도 계산
+        if (dto.getAddress() != null && !dto.getAddress().isBlank()) {
+            double[] coords = geoUtil.getLatLngFromAddress(dto.getAddress());
+            vendor.setLatitude(coords[0]);
+            vendor.setLongitude(coords[1]);
+        }
 
         Vendor updated = vendorRepository.save(vendor);
+        distanceService.updateDistancesForNewVendor(updated);
+
         return VendorResponseDTO.from(updated);
     }
 
@@ -59,28 +80,24 @@ public class VendorService {
         Vendor vendor = vendorRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException(ErrorStatus.VENDOR_NOT_FOUND));
 
-        // 실제 삭제 대신 비활성화
         vendor.deactivate();
         vendorRepository.save(vendor);
     }
 
-    // 거래처 조회
-    @Transactional
+    @Transactional(readOnly = true)
     public VendorResponseDTO getVendor(Long id) {
         Vendor vendor = vendorRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException(ErrorStatus.VENDOR_NOT_FOUND));
         return VendorResponseDTO.from(vendor);
     }
 
-    // 거래처 목록 조회
-    @Transactional
+    @Transactional(readOnly = true)
     public List<VendorListResponseDTO> getAllVendors() {
         return vendorRepository.findAll().stream()
                 .map(VendorListResponseDTO::from)
                 .toList();
     }
 
-    // 거래처 코드 생성
     private String generateNextVendorCode() {
         String prefix = "AGC";
 
@@ -92,7 +109,6 @@ public class VendorService {
         return String.format("%s-%03d", prefix, number);
     }
 
-    // 거래처 검색
     @Transactional(readOnly = true)
     public PageResponseDTO<VendorListResponseDTO> searchVendors(
             String keyword,
@@ -101,7 +117,6 @@ public class VendorService {
             int size
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-
         String searchKeyword = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
 
         Page<Vendor> vendorPage = vendorRepository.findByFilters(searchKeyword, status, pageable);

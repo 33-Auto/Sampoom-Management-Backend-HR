@@ -1,6 +1,6 @@
 package com.sampoom.backend.HR.api.branch.entity;
 
-import com.sampoom.backend.HR.common.entitiy.BaseTimeEntity;
+import com.sampoom.backend.HR.common.entity.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
