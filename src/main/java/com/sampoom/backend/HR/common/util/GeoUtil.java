@@ -101,15 +101,35 @@ public class GeoUtil {
     }
 
     /**
-     * 괄호 제거 + 특수문자 단순화
+     * 괄호나 특수문자를 단순 제거하는 안전 버전 (정규식 없음)
      */
     private static String normalizeAddress(String input) {
-        if (input == null) return "";
-        return input.replaceAll("\\([^)]*\\)", " ")
-                .replaceAll("[,·]", " ")
+        if (input == null || input.isBlank()) return "";
+
+        StringBuilder sb = new StringBuilder();
+        int depth = 0;
+
+        for (char c : input.toCharArray()) {
+            if (c == '(') {
+                depth++;
+                continue;
+            } else if (c == ')') {
+                if (depth > 0) depth--;
+                continue;
+            }
+
+            // 괄호 안 문자는 모두 건너뜀
+            if (depth == 0) sb.append(c);
+        }
+
+        // 나머지 단순 치환 (안전한 문자만)
+        return sb.toString()
+                .replace(",", " ")
+                .replace("·", " ")
                 .replaceAll("\\s{2,}", " ")
                 .trim();
     }
+
 
     /**
      * 괄호 안의 키워드 추출 (예: "서울특별시(중구)" → "중구")
