@@ -27,11 +27,13 @@ public class GeoUtil {
             Pattern.compile("^[가-힣a-zA-Z0-9\\-\\s\\.,()·]*$");
     private static final int ADDRESS_MAX_LENGTH = 100;
 
+    // 정규식 미리 컴파일 (CodeQL의 polynomial regex 경고 방지)
+    private static final Pattern SAFE_PAREN_PATTERN = Pattern.compile("\\(([^()]{0,50})\\)");
+
     private static boolean isSafeAddressInput(String address) {
         if (address == null || address.isBlank()) return false;
         if (address.length() > ADDRESS_MAX_LENGTH) return false;
-        if (!ADDRESS_SAFE_PATTERN.matcher(address).matches()) return false;
-        return true;
+        return ADDRESS_SAFE_PATTERN.matcher(address).matches();
     }
 
     /**
@@ -68,7 +70,7 @@ public class GeoUtil {
             }
 
             // 괄호 안 키워드 추출
-            Matcher matcher = Pattern.compile("\\(([^()]{0,50})\\)").matcher(address);
+            Matcher matcher = SAFE_PAREN_PATTERN.matcher(address);
             if (matcher.find()) {
                 String inside = matcher.group(1).split(",")[0].trim();
                 if (!inside.isEmpty()) {
@@ -107,7 +109,7 @@ public class GeoUtil {
             String uri = UriComponentsBuilder.fromHttpUrl(KAKAO_ADDRESS_URL)
                     .queryParam("query", q)
                     .queryParam("analyze_type", similar ? "similar" : "exact")
-                    .build(false)
+                    .build(true)
                     .toUriString();
 
             ResponseEntity<String> res = rt.exchange(uri, HttpMethod.GET, entity, String.class);
@@ -140,7 +142,7 @@ public class GeoUtil {
             String trimmed = q.length() > 90 ? q.substring(0, 90) : q; // ⚙️ 길이 제한 회피
             String uri = UriComponentsBuilder.fromHttpUrl(KAKAO_KEYWORD_URL)
                     .queryParam("query", trimmed)
-                    .build(false)
+                    .build(true)
                     .toUriString();
 
             ResponseEntity<String> res = rt.exchange(uri, HttpMethod.GET, entity, String.class);
