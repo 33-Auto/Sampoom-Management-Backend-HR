@@ -128,7 +128,7 @@ public class DistanceService {
 
 
     @Transactional
-    public void publishBranchEventIfWarehouse(Branch branch) {
+    public void publishBranchEventIfWarehouse(Branch branch, String eventType) {
         if (branch.getType() != BranchType.WAREHOUSE) return;
 
         BranchEvent.Payload payload = BranchEvent.Payload.builder()
@@ -145,7 +145,7 @@ public class DistanceService {
         outboxService.saveEvent(
                 "BRANCH",
                 branch.getId(),
-                "BranchCreated",
+                eventType,
                 branch.getVersion(),
                 payload
         );

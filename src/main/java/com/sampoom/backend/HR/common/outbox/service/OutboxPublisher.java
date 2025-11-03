@@ -28,14 +28,14 @@ public class OutboxPublisher {
 
         if (events.isEmpty()) return;
 
-        log.info("[PartOutboxPublisher] 발행할 이벤트 {}개 발견", events.size());
+        log.info("[OutboxPublisher] 발행할 이벤트 {}개 발견", events.size());
 
         for (Outbox outbox : events) {
             try {
                 // 개별 트랜잭션으로 처리하기 위해 public 메서드 호출
                 outboxEventProcessor.processAndPublishEvent(outbox);
             } catch (Exception e) {
-                log.error("[PartOutboxPublisher] 이벤트 처리 중 심각한 오류 발생 (트랜잭션 롤백됨): eventId={}, reason={}",
+                log.error("[OutboxPublisher] 이벤트 처리 중 심각한 오류 발생 (트랜잭션 롤백됨): eventId={}, reason={}",
                         outbox.getEventId(), e.getMessage());
             }
         }

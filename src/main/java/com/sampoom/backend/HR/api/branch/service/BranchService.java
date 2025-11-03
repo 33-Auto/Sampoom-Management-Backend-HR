@@ -52,8 +52,10 @@ public class BranchService {
             distanceService.updateDistancesForNewBranch(saved);
         }
 
-        // 창고일때만 Outbox 이벤트 발행
-        distanceService.publishBranchEventIfWarehouse(saved);
+        // 창고일 때만 Outbox 이벤트 발행
+        if (saved.isWarehouse()) {
+            distanceService.publishBranchEventIfWarehouse(saved, "BranchCreated");
+        }
 
         return BranchResponseDTO.from(saved);
     }
@@ -86,8 +88,10 @@ public class BranchService {
             distanceService.updateDistancesForNewBranch(updated);
         }
 
-        // 창고일 때만 BRANCH 이벤트 발행
-        distanceService.publishBranchEventIfWarehouse(updated);
+        // 창고일 때만 Outbox 이벤트 발행
+        if (updated.isWarehouse()) {
+            distanceService.publishBranchEventIfWarehouse(updated, "BranchUpdated");
+        }
 
         return BranchResponseDTO.from(updated);
     }
