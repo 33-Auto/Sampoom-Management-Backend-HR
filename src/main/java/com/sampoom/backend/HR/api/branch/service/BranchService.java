@@ -47,15 +47,13 @@ public class BranchService {
 
         Branch saved = branchRepository.save(branch);
 
-        // 거리 자동 계산
+        // 거리 자동 계산 (창고만)
         if (saved.getLatitude() != null && saved.getLongitude() != null) {
             distanceService.updateDistancesForNewBranch(saved);
         }
 
-        // 창고일 때만 Outbox 이벤트 발행
-        if (saved.isWarehouse()) {
-            distanceService.publishBranchEventIfWarehouse(saved, "BranchCreated");
-        }
+        // Outbox 이벤트 발행
+        distanceService.publishBranchEvent(saved, "BranchCreated");
 
         return BranchResponseDTO.from(saved);
     }
@@ -88,10 +86,9 @@ public class BranchService {
             distanceService.updateDistancesForNewBranch(updated);
         }
 
-        // 창고일 때만 Outbox 이벤트 발행
-        if (updated.isWarehouse()) {
-            distanceService.publishBranchEventIfWarehouse(updated, "BranchUpdated");
-        }
+        // Outbox 이벤트 발행
+        distanceService.publishBranchEvent(updated, "BranchUpdated");
+
 
         return BranchResponseDTO.from(updated);
     }
@@ -104,6 +101,9 @@ public class BranchService {
 
         branch.deactivate();
         branchRepository.save(branch);
+
+        // 삭제 이벤트도 Outbox에 발행 가능 (선택)
+        distanceService.publishBranchEvent(branch, "BranchDeactivated");
     }
 
     // 지점 단일 조회
@@ -163,3 +163,4 @@ public class BranchService {
                 .build();
     }
 }
+

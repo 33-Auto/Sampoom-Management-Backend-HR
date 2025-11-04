@@ -7,9 +7,11 @@ import com.sampoom.backend.HR.api.vendor.dto.VendorResponseDTO;
 import com.sampoom.backend.HR.api.vendor.dto.VendorUpdateRequestDTO;
 import com.sampoom.backend.HR.api.vendor.entity.Vendor;
 import com.sampoom.backend.HR.api.vendor.entity.VendorStatus;
+import com.sampoom.backend.HR.api.vendor.event.dto.VendorEvent;
 import com.sampoom.backend.HR.api.vendor.repository.VendorRepository;
 import com.sampoom.backend.HR.common.dto.PageResponseDTO;
 import com.sampoom.backend.HR.common.exception.NotFoundException;
+import com.sampoom.backend.HR.common.outbox.service.OutboxService;
 import com.sampoom.backend.HR.common.response.ErrorStatus;
 import com.sampoom.backend.HR.common.util.GeoUtil;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +31,7 @@ public class VendorService {
 
     private final VendorRepository vendorRepository;
     private final DistanceService distanceService;
+    private final OutboxService outboxService;
     private final GeoUtil geoUtil;
 
     // 거래처 등록
@@ -51,6 +54,28 @@ public class VendorService {
         if (saved.getLatitude() != null && saved.getLongitude() != null) {
             distanceService.updateDistancesForNewVendor(saved);
         }
+
+        // 이벤트 발행 (대리점 생성)
+        VendorEvent.Payload payload = VendorEvent.Payload.builder()
+                .vendorId(saved.getId())
+                .vendorCode(saved.getVendorCode())
+                .vendorName(saved.getName())
+                .address(saved.getAddress())
+                .latitude(saved.getLatitude())
+                .longitude(saved.getLongitude())
+                .businessNumber(saved.getBusinessNumber())
+                .ceoName(saved.getCeoName())
+                .status(saved.getStatus().name())
+                .deleted(false)
+                .build();
+
+        outboxService.saveEvent(
+                "VENDOR",
+                saved.getId(),
+                "VendorCreated",
+                saved.getVersion(),
+                payload
+        );
 
         return VendorResponseDTO.from(saved);
     }
@@ -83,6 +108,28 @@ public class VendorService {
             distanceService.updateDistancesForNewVendor(updated);
         }
 
+        // 이벤트 발행 (대리점 수정)
+        VendorEvent.Payload payload = VendorEvent.Payload.builder()
+                .vendorId(updated.getId())
+                .vendorCode(updated.getVendorCode())
+                .vendorName(updated.getName())
+                .address(updated.getAddress())
+                .latitude(updated.getLatitude())
+                .longitude(updated.getLongitude())
+                .businessNumber(updated.getBusinessNumber())
+                .ceoName(updated.getCeoName())
+                .status(updated.getStatus().name())
+                .deleted(false)
+                .build();
+
+        outboxService.saveEvent(
+                "VENDOR",
+                updated.getId(),
+                "VendorUpdated",
+                updated.getVersion(),
+                payload
+        );
+
         return VendorResponseDTO.from(updated);
     }
 
@@ -93,6 +140,28 @@ public class VendorService {
 
         vendor.deactivate();
         vendorRepository.save(vendor);
+
+        // 이벤트 발행 (삭제)
+        VendorEvent.Payload payload = VendorEvent.Payload.builder()
+                .vendorId(vendor.getId())
+                .vendorCode(vendor.getVendorCode())
+                .vendorName(vendor.getName())
+                .address(vendor.getAddress())
+                .latitude(vendor.getLatitude())
+                .longitude(vendor.getLongitude())
+                .businessNumber(vendor.getBusinessNumber())
+                .ceoName(vendor.getCeoName())
+                .status(vendor.getStatus().name())
+                .deleted(true)
+                .build();
+
+        outboxService.saveEvent(
+                "VENDOR",
+                vendor.getId(),
+                "VendorDeleted",
+                vendor.getVersion(),
+                payload
+        );
     }
 
     @Transactional(readOnly = true)

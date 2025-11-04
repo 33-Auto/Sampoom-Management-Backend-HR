@@ -35,13 +35,16 @@ public class Vendor extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     private VendorStatus status = VendorStatus.ACTIVE;
 
+    @Version
+    private Long version; // 낙관적 락 & 이벤트 버전 관리
+
 //    private Long managerEmployeeId;  // 담당 직원 ID
 
     public void changeInfo(String name, String businessNumber, String ceoName, String address, VendorStatus status) {
         if (name != null) this.name = name;
         if (businessNumber != null) this.businessNumber = businessNumber;
         if (ceoName != null) this.ceoName = ceoName;
-        if (address != null) this.address = address;   // ✅ 추가
+        if (address != null) this.address = address;
         if (status != null) this.status = status;
     }
 

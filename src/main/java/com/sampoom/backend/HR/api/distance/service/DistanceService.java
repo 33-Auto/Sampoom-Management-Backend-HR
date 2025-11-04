@@ -126,6 +126,34 @@ public class DistanceService {
         }
     }
 
+    @Transactional
+    public void publishBranchEvent(Branch branch, String eventType) {
+        BranchEvent.Payload payload = BranchEvent.Payload.builder()
+                .branchId(branch.getId())
+                .branchCode(branch.getBranchCode())
+                .branchName(branch.getName())
+                .address(branch.getAddress())
+                .latitude(branch.getLatitude())
+                .longitude(branch.getLongitude())
+                .status(branch.getStatus().name())
+                .type(branch.getType().name()) // ✅ FACTORY or WAREHOUSE
+                .deleted(false)
+                .build();
+
+        String aggregateType = branch.getType() == BranchType.FACTORY ? "FACTORY" : "BRANCH";
+
+        outboxService.saveEvent(
+                aggregateType,
+                branch.getId(),
+                eventType,
+                branch.getVersion(),
+                payload
+        );
+
+        log.info("[DistanceService] {} 이벤트 발행 완료: {} ({})",
+                aggregateType, branch.getName(), eventType);
+    }
+
 
     @Transactional
     public void publishBranchEventIfWarehouse(Branch branch, String eventType) {
@@ -139,6 +167,7 @@ public class DistanceService {
                 .latitude(branch.getLatitude())
                 .longitude(branch.getLongitude())
                 .status(branch.getStatus().name())
+                .type(branch.getType().name())
                 .deleted(false)
                 .build();
 
@@ -153,8 +182,26 @@ public class DistanceService {
         log.info("[DistanceService] 창고 BRANCH 이벤트 발행 완료: {}", branch.getName());
     }
 
+    @Transactional
+    public void publishBranchEventIfFactory(Branch branch, String eventType) {
+        var payload = BranchEvent.Payload.builder()
+                .branchId(branch.getId())
+                .branchCode(branch.getBranchCode())
+                .branchName(branch.getName())
+                .address(branch.getAddress())
+                .latitude(branch.getLatitude())
+                .longitude(branch.getLongitude())
+                .status(branch.getStatus().name())
+                .deleted(false)
+                .build();
+
+        outboxService.saveEvent("FACTORY", branch.getId(), eventType, branch.getVersion(), payload);
+        log.info("[DistanceService] Factory 이벤트 발행 완료: {} ({})", branch.getName(), eventType);
+    }
+
     private boolean hasValidCoordinates(Branch branch, Vendor vendor) {
         return branch.getLatitude() != null && branch.getLongitude() != null
                 && vendor.getLatitude() != null && vendor.getLongitude() != null;
     }
 }
+

@@ -3,6 +3,7 @@ package com.sampoom.backend.HR.common.outbox.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sampoom.backend.HR.api.branch.event.dto.BranchEvent;
 import com.sampoom.backend.HR.api.distance.event.dto.BranchAgencyDistanceEvent;
+import com.sampoom.backend.HR.api.vendor.event.dto.VendorEvent;
 import com.sampoom.backend.HR.common.outbox.entity.Outbox;
 import com.sampoom.backend.HR.common.outbox.repository.OutboxRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,8 @@ public class OutboxEventProcessor {
     // Kafka 토픽 이름 정의
     private static final String TOPIC_BRANCH = "branch-events";
     private static final String TOPIC_BRANCH_DISTANCE = "branch-distance-events";
+    private static final String TOPIC_VENDOR = "vendor-events";
+    private static final String TOPIC_BRANCH_FACTORY = "factory-branch-events";
 
     private final OutboxRepository outboxRepository;
     private final KafkaTemplate<String, Object> kafkaTemplate;
@@ -40,6 +43,7 @@ public class OutboxEventProcessor {
             // AggregateType에 따라 DTO 역질렬화 및 토픽/이벤트 구성
             switch (outbox.getAggregateType()) {
                 case "BRANCH":
+                case "FACTORY":
                     BranchEvent.Payload branchPayload =
                             objectMapper.readValue(outbox.getPayload(), BranchEvent.Payload.class);
                     eventToSend = BranchEvent.builder()
@@ -49,7 +53,10 @@ public class OutboxEventProcessor {
                             .occurredAt(outbox.getOccurredAt().toString())
                             .payload(branchPayload)
                             .build();
-                    topicName = TOPIC_BRANCH;
+
+                    // FACTORY면 factory-events로 보냄, 아니면 branch-events로
+                    topicName = outbox.getAggregateType().equals("FACTORY")
+                            ? TOPIC_BRANCH_FACTORY : TOPIC_BRANCH;
                     break;
 
                 // 창고-거래처 거리 이벤트 추가
@@ -66,13 +73,25 @@ public class OutboxEventProcessor {
                     topicName = TOPIC_BRANCH_DISTANCE;
                     break;
 
+                case "VENDOR":
+                    VendorEvent.Payload vendorPayload =
+                            objectMapper.readValue(outbox.getPayload(), VendorEvent.Payload.class);
+                    eventToSend = VendorEvent.builder()
+                            .eventId(outbox.getEventId())
+                            .eventType(outbox.getEventType())
+                            .version(outbox.getVersion())
+                            .occurredAt(outbox.getOccurredAt().toString())
+                            .payload(vendorPayload)
+                            .build();
+                    topicName = TOPIC_VENDOR;
+                    break;
+
                 default:
                     throw new IllegalStateException("알 수 없는 AggregateType: " + outbox.getAggregateType());
             }
 
             // Kafka 발행 (동기식 처리)
-            // Kafka가 "잘 받았다"고 응답할 때까지 10초간 기다립니다.
-            kafkaTemplate.send(topicName, eventKey, eventToSend).get(10, TimeUnit.SECONDS);
+            kafkaTemplate.send(topicName, eventKey, eventToSend).get(30, TimeUnit.SECONDS);
 
             // 발행 성공 시 처리 (같은 트랜잭션)
             outbox.markPublished();

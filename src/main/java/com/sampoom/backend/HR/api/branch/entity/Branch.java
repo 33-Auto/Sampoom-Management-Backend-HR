@@ -37,7 +37,7 @@ public class Branch extends BaseTimeEntity {
     private BranchStatus status = BranchStatus.ACTIVE;
 
     @Version
-    private Long version; // ✅ 낙관적 락 & 이벤트 버전 관리
+    private Long version; // 낙관적 락 & 이벤트 버전 관리
 
     /** 지점 정보 수정 */
     public void updateInfo(String name, String address, BranchStatus status) {

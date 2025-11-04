@@ -15,5 +15,7 @@ public class BranchEventBatchRunner implements CommandLineRunner {
         // 필요할 때만 실행 (DB 전체 Outbox 초기 등록)
 //         branchEventBatchService.publishAllBranchEvents();
 //         branchEventBatchService.publishAllDistanceEvents();
+//         branchEventBatchService.publishAllFactoryEvents();
+//         branchEventBatchService.publishAllVendorEvents();
     }
 }
