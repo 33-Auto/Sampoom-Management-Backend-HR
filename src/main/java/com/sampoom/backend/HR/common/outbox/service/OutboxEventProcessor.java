@@ -39,6 +39,13 @@ public class OutboxEventProcessor {
         Object eventToSend; // Kafka로 보낼 최종 이벤트 DTO
         String eventKey = outbox.getAggregateId().toString();
 
+        // 최대 재시도 횟수 체크
+        if (outbox.getRetryCount() >= 10) {
+            log.warn("[OutboxEvent] 최대 재시도 횟수 초과로 발행 중단: eventId={}, retryCount={}",
+                    outbox.getEventId(), outbox.getRetryCount());
+            return;
+        }
+
         try {
             // AggregateType에 따라 DTO 역질렬화 및 토픽/이벤트 구성
             switch (outbox.getAggregateType()) {
@@ -102,7 +109,15 @@ public class OutboxEventProcessor {
             // Kafka 발행 실패 또는 DB 업데이트 실패 시
             outbox.markFailed();
             outboxRepository.save(outbox);
-            log.error("[OutboxEvent] 발행 실패 (FAILED 처리): eventId={}, reason={}", outbox.getEventId(), e.getMessage());
+
+            // 재시도 횟수에 따른 로그 레벨 조정
+            if (outbox.getRetryCount() >= 10) {
+                log.error("[OutboxEvent] 최종 발행 실패 (재시도 한계 도달): eventId={}, retryCount={}, reason={}",
+                        outbox.getEventId(), outbox.getRetryCount(), e.getMessage());
+            } else {
+                log.warn("[OutboxEvent] 발행 실패 (재시도 예정): eventId={}, retryCount={}, reason={}",
+                        outbox.getEventId(), outbox.getRetryCount(), e.getMessage());
+            }
         }
     }
 }
