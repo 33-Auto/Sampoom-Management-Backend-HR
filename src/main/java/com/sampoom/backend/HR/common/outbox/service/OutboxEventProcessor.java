@@ -3,6 +3,7 @@ package com.sampoom.backend.HR.common.outbox.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sampoom.backend.HR.api.branch.event.dto.BranchEvent;
 import com.sampoom.backend.HR.api.distance.event.dto.BranchAgencyDistanceEvent;
+import com.sampoom.backend.HR.api.distance.event.dto.BranchFactoryDistanceEvent;
 import com.sampoom.backend.HR.api.vendor.event.dto.VendorEvent;
 import com.sampoom.backend.HR.common.outbox.entity.Outbox;
 import com.sampoom.backend.HR.common.outbox.repository.OutboxRepository;
@@ -66,18 +67,61 @@ public class OutboxEventProcessor {
                             ? TOPIC_BRANCH_FACTORY : TOPIC_BRANCH;
                     break;
 
-                // 창고-거래처 거리 이벤트 추가
-                case "DISTANCE":
-                    BranchAgencyDistanceEvent.Payload distancePayload =
+                // 창고-공장 거리 이벤트
+                case "BRANCH_FACTORY_DISTANCE":
+                    BranchFactoryDistanceEvent.Payload factoryDistancePayload =
+                            objectMapper.readValue(outbox.getPayload(), BranchFactoryDistanceEvent.Payload.class);
+                    eventToSend = BranchFactoryDistanceEvent.builder()
+                            .eventId(outbox.getEventId())
+                            .eventType(outbox.getEventType())
+                            .version(outbox.getVersion())
+                            .occurredAt(outbox.getOccurredAt().toString())
+                            .payload(factoryDistancePayload)
+                            .build();
+                    topicName = "branch-factory-distance-events";
+                    break;
+
+                // 창고-대리점 거리 이벤트
+                case "BRANCH_AGENCY_DISTANCE":
+                    BranchAgencyDistanceEvent.Payload agencyDistancePayload =
                             objectMapper.readValue(outbox.getPayload(), BranchAgencyDistanceEvent.Payload.class);
                     eventToSend = BranchAgencyDistanceEvent.builder()
                             .eventId(outbox.getEventId())
                             .eventType(outbox.getEventType())
                             .version(outbox.getVersion())
                             .occurredAt(outbox.getOccurredAt().toString())
-                            .payload(distancePayload)
+                            .payload(agencyDistancePayload)
                             .build();
                     topicName = TOPIC_BRANCH_DISTANCE;
+                    break;
+
+                // 기존 DISTANCE 타입 (하위 호환성)
+                case "DISTANCE":
+                    // BranchAgencyDistanceEvent와 BranchFactoryDistanceEvent 구분
+                    if (outbox.getEventType().equals("BranchFactoryDistanceCalculated")) {
+                        BranchFactoryDistanceEvent.Payload legacyFactoryDistancePayload =
+                                objectMapper.readValue(outbox.getPayload(), BranchFactoryDistanceEvent.Payload.class);
+                        eventToSend = BranchFactoryDistanceEvent.builder()
+                                .eventId(outbox.getEventId())
+                                .eventType(outbox.getEventType())
+                                .version(outbox.getVersion())
+                                .occurredAt(outbox.getOccurredAt().toString())
+                                .payload(legacyFactoryDistancePayload)
+                                .build();
+                        topicName = "branch-factory-distance-events";
+                    } else {
+                        // 기존 BranchAgencyDistanceEvent 처리
+                        BranchAgencyDistanceEvent.Payload legacyDistancePayload =
+                                objectMapper.readValue(outbox.getPayload(), BranchAgencyDistanceEvent.Payload.class);
+                        eventToSend = BranchAgencyDistanceEvent.builder()
+                                .eventId(outbox.getEventId())
+                                .eventType(outbox.getEventType())
+                                .version(outbox.getVersion())
+                                .occurredAt(outbox.getOccurredAt().toString())
+                                .payload(legacyDistancePayload)
+                                .build();
+                        topicName = TOPIC_BRANCH_DISTANCE;
+                    }
                     break;
 
                 case "VENDOR":
