@@ -9,6 +9,7 @@ import com.sampoom.backend.HR.api.branch.entity.BranchStatus;
 import com.sampoom.backend.HR.api.branch.entity.BranchType;
 import com.sampoom.backend.HR.api.branch.repository.BranchRepository;
 import com.sampoom.backend.HR.api.distance.service.DistanceService;
+import com.sampoom.backend.HR.api.distance.service.BranchFactoryDistanceService;
 import com.sampoom.backend.HR.common.dto.PageResponseDTO;
 import com.sampoom.backend.HR.common.exception.NotFoundException;
 import com.sampoom.backend.HR.common.response.ErrorStatus;
@@ -30,6 +31,7 @@ public class BranchService {
 
     private final BranchRepository branchRepository;
     private final DistanceService distanceService;
+    private final BranchFactoryDistanceService branchFactoryDistanceService;
     private final GeoUtil geoUtil;
 
     // 지점 등록
@@ -47,9 +49,16 @@ public class BranchService {
 
         Branch saved = branchRepository.save(branch);
 
-        // 거리 자동 계산 (창고만)
+        // 거리 자동 계산
         if (saved.getLatitude() != null && saved.getLongitude() != null) {
-            distanceService.updateDistancesForNewBranch(saved);
+            if (saved.getType() == BranchType.WAREHOUSE) {
+                // 창고인 경우: 대리점-창고 거리 + 공장-창고 거리 계산
+                distanceService.updateDistancesForNewBranch(saved); // 대리점-창고 거리
+                branchFactoryDistanceService.updateDistancesForNewWarehouse(saved); // 공장-창고 거리
+            } else if (saved.getType() == BranchType.FACTORY) {
+                // 공장인 경우: 공장-창고 거리 계산
+                branchFactoryDistanceService.updateDistancesForNewFactory(saved);
+            }
         }
 
         // Outbox 이벤트 발행
@@ -83,7 +92,14 @@ public class BranchService {
 
         // 거리 재계산
         if (updated.getLatitude() != null && updated.getLongitude() != null) {
-            distanceService.updateDistancesForNewBranch(updated);
+            if (updated.getType() == BranchType.WAREHOUSE) {
+                // 창고인 경우: 대리점-창고 거리 + 공장-창고 거리 재계산
+                distanceService.updateDistancesForNewBranch(updated); // 대리점-창고 거리
+                branchFactoryDistanceService.updateDistancesForNewWarehouse(updated); // 공장-창고 거리
+            } else if (updated.getType() == BranchType.FACTORY) {
+                // 공장인 경우: 공장-창고 거리 재계산
+                branchFactoryDistanceService.updateDistancesForNewFactory(updated);
+            }
         }
 
         // Outbox 이벤트 발행
@@ -163,4 +179,3 @@ public class BranchService {
                 .build();
     }
 }
-

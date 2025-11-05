@@ -30,7 +30,6 @@ public class BranchEvent {
         private Double latitude;
         private Double longitude;
         private String status;       // ACTIVE / INACTIVE 등
-        private String type;
         private Boolean deleted;     // 논리삭제 여부
     }
 }

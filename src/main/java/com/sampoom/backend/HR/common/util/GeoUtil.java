@@ -167,7 +167,9 @@ public class GeoUtil {
 
             JSONObject first = docs.getJSONObject(0);
             // Kakao returns x=lon, y=lat
-            return new double[]{first.getDouble("y"), first.getDouble("x")};
+            double lat = DistanceUtil.roundToTwoDecimalPlaces(first.getDouble("y"));
+            double lon = DistanceUtil.roundToTwoDecimalPlaces(first.getDouble("x"));
+            return new double[]{lat, lon};
         } catch (Exception e) {
             log.error("❌ Kakao 주소검색 중 예외 ({}): {}", query, e.getMessage());
             return new double[]{0.0, 0.0};
@@ -193,7 +195,9 @@ public class GeoUtil {
             if (docs == null || docs.length() == 0) return new double[]{0.0, 0.0};
 
             JSONObject first = docs.getJSONObject(0);
-            return new double[]{first.getDouble("y"), first.getDouble("x")};
+            double lat = DistanceUtil.roundToTwoDecimalPlaces(first.getDouble("y"));
+            double lon = DistanceUtil.roundToTwoDecimalPlaces(first.getDouble("x"));
+            return new double[]{lat, lon};
         } catch (Exception e) {
             log.error("❌ Kakao 키워드검색 중 예외 ({}): {}", query, e.getMessage());
             return new double[]{0.0, 0.0};

@@ -11,15 +11,12 @@ import com.sampoom.backend.HR.api.vendor.repository.VendorRepository;
 import com.sampoom.backend.HR.api.distance.repository.DistanceRepository;
 import com.sampoom.backend.HR.common.outbox.service.OutboxService;
 import com.sampoom.backend.HR.common.util.DistanceUtil;
-import com.sampoom.backend.HR.common.util.GeoUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.UUID;
 
 @Slf4j
 @Service
@@ -30,23 +27,25 @@ public class DistanceService {
     private final BranchRepository branchRepository;
     private final VendorRepository vendorRepository;
     private final OutboxService outboxService;
+    private final BranchFactoryDistanceService branchFactoryDistanceService;
 
     @Transactional
     public void updateDistancesForNewVendor(Vendor vendor) {
-        List<Branch> branches = branchRepository.findAll();
+        // 창고만 조회 (공장 제외)
+        List<Branch> warehouses = branchRepository.findByType(BranchType.WAREHOUSE);
 
-        for (Branch branch : branches) {
-            if (branch.getLatitude() != null && branch.getLongitude() != null
+        for (Branch warehouse : warehouses) {
+            if (warehouse.getLatitude() != null && warehouse.getLongitude() != null
                     && vendor.getLatitude() != null && vendor.getLongitude() != null) {
 
                 Double distanceKm = DistanceUtil.calculateDistance(
-                        branch.getLatitude(), branch.getLongitude(),
+                        warehouse.getLatitude(), warehouse.getLongitude(),
                         vendor.getLatitude(), vendor.getLongitude()
                 );
 
-                BranchVendorDistance distanceEntity = distanceRepository.findByBranchAndVendor(branch, vendor)
+                BranchVendorDistance distanceEntity = distanceRepository.findByBranchAndVendor(warehouse, vendor)
                         .orElseGet(() -> BranchVendorDistance.builder()
-                                .branch(branch)
+                                .branch(warehouse)
                                 .vendor(vendor)
                                 .build());
 
@@ -56,7 +55,7 @@ public class DistanceService {
                 // Payload 생성
                 BranchAgencyDistanceEvent.Payload payload = BranchAgencyDistanceEvent.Payload.builder()
                         .distanceId(distanceEntity.getId())
-                        .branchId(branch.getId())
+                        .branchId(warehouse.getId())
                         .agencyId(vendor.getId())
                         .distanceKm(distanceKm)
                         .deleted(false)
@@ -64,7 +63,7 @@ public class DistanceService {
 
                 // Outbox 저장
                 outboxService.saveEvent(
-                        "DISTANCE",
+                        "BRANCH_AGENCY_DISTANCE",  // 새로운 aggregate type
                         distanceEntity.getId(),
                         "DistanceCalculated",
                         distanceEntity.getVersion(),
@@ -73,42 +72,55 @@ public class DistanceService {
             }
         }
         log.info("[DistanceService] Vendor({}) 거리 {}건 업데이트 및 이벤트 발행 완료",
-                vendor.getName(), branches.size());
+                vendor.getName(), warehouses.size());
     }
 
     @Transactional
     public void updateDistancesForNewBranch(Branch branch) {
 
-        // 공장은 거리 계산 안 함
-        if (branch.getType() != BranchType.WAREHOUSE) {
-            log.info("[DistanceService] 공장은 거리 계산 스킵: {}", branch.getName());
+        // 공장인 경우 창고-공장 거리 계산
+        if (branch.getType() == BranchType.FACTORY) {
+            branchFactoryDistanceService.updateDistancesForNewFactory(branch);
             return;
         }
 
+        // 창고인 경우 대리점-창고 거리 계산
+        if (branch.getType() == BranchType.WAREHOUSE) {
+            // 기존 대리점-창고 거리 계산
+            updateVendorDistancesForWarehouse(branch);
+            // 창고-공장 거리 계산
+            branchFactoryDistanceService.updateDistancesForNewWarehouse(branch);
+        }
+    }
+
+    /**
+     * 창고에 대한 대리점-창고 거리 계산
+     */
+    private void updateVendorDistancesForWarehouse(Branch warehouse) {
         List<Vendor> vendors = vendorRepository.findAll();
 
         for (Vendor vendor : vendors) {
-            if (branch.getLatitude() != null && branch.getLongitude() != null
+            if (warehouse.getLatitude() != null && warehouse.getLongitude() != null
                     && vendor.getLatitude() != null && vendor.getLongitude() != null) {
 
                 double distanceKm = DistanceUtil.calculateDistance(
-                        branch.getLatitude(), branch.getLongitude(),
+                        warehouse.getLatitude(), warehouse.getLongitude(),
                         vendor.getLatitude(), vendor.getLongitude()
                 );
 
-                BranchVendorDistance distanceEntity = distanceRepository.findByBranchAndVendor(branch, vendor)
+                BranchVendorDistance distanceEntity = distanceRepository.findByBranchAndVendor(warehouse, vendor)
                         .orElseGet(() -> BranchVendorDistance.builder()
-                                .branch(branch)
+                                .branch(warehouse)
                                 .vendor(vendor)
                                 .build());
 
                 distanceEntity.updateDistance(distanceKm);
                 distanceRepository.save(distanceEntity);
 
-                ;// Payload 생성
+                // Payload 생성
                 BranchAgencyDistanceEvent.Payload payload = BranchAgencyDistanceEvent.Payload.builder()
                         .distanceId(distanceEntity.getId())
-                        .branchId(branch.getId())
+                        .branchId(warehouse.getId())
                         .agencyId(vendor.getId())
                         .distanceKm(distanceKm)
                         .deleted(false)
@@ -116,7 +128,7 @@ public class DistanceService {
 
                 // Outbox 저장
                 outboxService.saveEvent(
-                        "DISTANCE",
+                        "BRANCH_AGENCY_DISTANCE",  // 새로운 aggregate type
                         distanceEntity.getId(),
                         "DistanceCalculated",
                         distanceEntity.getVersion(),
@@ -136,7 +148,6 @@ public class DistanceService {
                 .latitude(branch.getLatitude())
                 .longitude(branch.getLongitude())
                 .status(branch.getStatus().name())
-                .type(branch.getType().name()) // ✅ FACTORY or WAREHOUSE
                 .deleted(false)
                 .build();
 
@@ -154,7 +165,6 @@ public class DistanceService {
                 aggregateType, branch.getName(), eventType);
     }
 
-
     @Transactional
     public void publishBranchEventIfWarehouse(Branch branch, String eventType) {
         if (branch.getType() != BranchType.WAREHOUSE) return;
@@ -167,7 +177,6 @@ public class DistanceService {
                 .latitude(branch.getLatitude())
                 .longitude(branch.getLongitude())
                 .status(branch.getStatus().name())
-                .type(branch.getType().name())
                 .deleted(false)
                 .build();
 
@@ -198,10 +207,4 @@ public class DistanceService {
         outboxService.saveEvent("FACTORY", branch.getId(), eventType, branch.getVersion(), payload);
         log.info("[DistanceService] Factory 이벤트 발행 완료: {} ({})", branch.getName(), eventType);
     }
-
-    private boolean hasValidCoordinates(Branch branch, Vendor vendor) {
-        return branch.getLatitude() != null && branch.getLongitude() != null
-                && vendor.getLatitude() != null && vendor.getLongitude() != null;
-    }
 }
-

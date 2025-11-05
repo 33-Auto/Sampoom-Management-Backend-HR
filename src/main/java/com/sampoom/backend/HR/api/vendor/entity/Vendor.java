@@ -1,7 +1,7 @@
 package com.sampoom.backend.HR.api.vendor.entity;
 
 import com.sampoom.backend.HR.common.entity.BaseTimeEntity;
-import com.sampoom.backend.HR.common.util.GeoUtil;
+import com.sampoom.backend.HR.common.util.DistanceUtil;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -48,8 +48,13 @@ public class Vendor extends BaseTimeEntity {
         if (status != null) this.status = status;
     }
 
-    public void setLatitude(Double latitude) { this.latitude = latitude; }
-    public void setLongitude(Double longitude) { this.longitude = longitude; }
+    public void setLatitude(Double latitude) {
+        this.latitude = latitude != null ? DistanceUtil.roundToTwoDecimalPlaces(latitude) : null;
+    }
+
+    public void setLongitude(Double longitude) {
+        this.longitude = longitude != null ? DistanceUtil.roundToTwoDecimalPlaces(longitude) : null;
+    }
 
 
     // 거래처 비활성화
