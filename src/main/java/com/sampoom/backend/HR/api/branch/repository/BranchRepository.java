@@ -18,15 +18,17 @@ public interface BranchRepository extends JpaRepository<Branch, Long> {
 
     List<Branch> findByType(BranchType type);
 
+
     @Query("""
     SELECT b FROM Branch b
-    WHERE (:keyword IS NULL 
-        OR b.branchCode LIKE CONCAT('%', :keyword, '%') 
-        OR b.name LIKE CONCAT('%', :keyword, '%'))
+    WHERE (COALESCE(:keyword, '') = '' 
+       OR b.branchCode ILIKE CONCAT('%', :keyword, '%') 
+       OR b.name ILIKE CONCAT('%', :keyword, '%'))
     AND (:type IS NULL OR b.type = :type)
     AND (:status IS NULL OR b.status = :status)
     ORDER BY b.createdAt DESC
-""")
+    """)
+
     Page<Branch> findByFilters(
             @Param("keyword") String keyword,
             @Param("type") BranchType type,
