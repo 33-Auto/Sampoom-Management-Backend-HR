@@ -27,13 +27,13 @@ public class SwaggerConfig {
                 .description("로컬 서버");
 
         Server prodServer = new Server()
-                .url("https://sampoom.store/api/hr")
+                .url("https://sampoom.store/api/site")
                 .description("배포 서버");
 
         return new OpenAPI()
                 .info(new Info()
-                        .title("삼삼오토 HR Service API")
-                        .description("HR 서비스 REST API 문서")
+                        .title("삼삼오토 SITE Service API")
+                        .description("SITE 서비스 REST API 문서")
                         .version("1.0.0"))
                 .servers(List.of( prodServer,localServer));
     }
