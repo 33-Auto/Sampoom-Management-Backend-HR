@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/branches")
+@RequestMapping("/branches")
 @RequiredArgsConstructor
 @Tag(name = "지점 관리 API", description = "공장/창고 지점 등록, 수정, 조회, 검색, 비활성화")
 public class BranchController {
