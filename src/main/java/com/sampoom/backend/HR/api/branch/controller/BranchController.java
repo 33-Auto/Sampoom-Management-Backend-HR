@@ -83,4 +83,20 @@ public class BranchController {
                 branchService.searchBranches(keyword, type, status, page, size);
         return ApiResponse.success(SuccessStatus.OK, result);
     }
+
+    /** 창고 목록 조회 */
+    @Operation(summary = "창고 목록 조회", description = "활성화된 창고 목록을 조회합니다.")
+    @GetMapping("/warehouses")
+    public ResponseEntity<ApiResponse<List<SimpleBranchResponseDTO>>> getWarehouseList() {
+        List<SimpleBranchResponseDTO> warehouses = branchService.getWarehouseList();
+        return ApiResponse.success(SuccessStatus.OK, warehouses);
+    }
+
+    /** 공장 목록 조회 */
+    @Operation(summary = "공장 목록 조회", description = "활성화된 공장 목록을 조회합니다.")
+    @GetMapping("/factories")
+    public ResponseEntity<ApiResponse<List<SimpleBranchResponseDTO>>> getFactoryList() {
+        List<SimpleBranchResponseDTO> factories = branchService.getFactoryList();
+        return ApiResponse.success(SuccessStatus.OK, factories);
+    }
 }
