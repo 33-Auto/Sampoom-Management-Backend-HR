@@ -18,6 +18,8 @@ public interface BranchRepository extends JpaRepository<Branch, Long> {
 
     List<Branch> findByType(BranchType type);
 
+    List<Branch> findByTypeOrderByNameAsc(BranchType type);
+
 
     @Query("""
     SELECT b FROM Branch b

@@ -4,6 +4,7 @@ import com.sampoom.backend.HR.api.branch.dto.BranchListResponseDTO;
 import com.sampoom.backend.HR.api.branch.dto.BranchRequestDTO;
 import com.sampoom.backend.HR.api.branch.dto.BranchResponseDTO;
 import com.sampoom.backend.HR.api.branch.dto.BranchUpdateRequestDTO;
+import com.sampoom.backend.HR.api.branch.dto.SimpleBranchResponseDTO;
 import com.sampoom.backend.HR.api.branch.entity.Branch;
 import com.sampoom.backend.HR.api.branch.entity.BranchStatus;
 import com.sampoom.backend.HR.api.branch.entity.BranchType;
@@ -177,5 +178,23 @@ public class BranchService {
                 .currentPage(branchPage.getNumber())
                 .pageSize(branchPage.getSize())
                 .build();
+    }
+
+    // 창고 목록 조회
+    @Transactional
+    public List<SimpleBranchResponseDTO> getWarehouseList() {
+        return branchRepository.findByTypeOrderByNameAsc(BranchType.WAREHOUSE)
+                .stream()
+                .map(SimpleBranchResponseDTO::from)
+                .collect(Collectors.toList());
+    }
+
+    // 공장 목록 조회
+    @Transactional
+    public List<SimpleBranchResponseDTO> getFactoryList() {
+        return branchRepository.findByTypeOrderByNameAsc(BranchType.FACTORY)
+                .stream()
+                .map(SimpleBranchResponseDTO::from)
+                .collect(Collectors.toList());
     }
 }
