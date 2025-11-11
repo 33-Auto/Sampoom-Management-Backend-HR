@@ -3,8 +3,11 @@ package com.sampoom.backend.HR.common.config.swagger;
 
 
 
+import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.servers.Server;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,6 +25,17 @@ public class SwaggerConfig {
 
     @Bean
     public OpenAPI openAPI() {
+        // JWT Authorization 스키마 정의
+        SecurityScheme jwtScheme = new SecurityScheme()
+                .type(SecurityScheme.Type.HTTP)
+                .scheme("bearer")
+                .bearerFormat("JWT")
+                .in(SecurityScheme.In.HEADER)
+                .name("Authorization");
+
+        SecurityRequirement jwtRequirement = new SecurityRequirement()
+                .addList("JWT");
+
         Server localServer = new Server()
                 .url("http://localhost:8080/")
                 .description("로컬 서버");
@@ -35,7 +49,10 @@ public class SwaggerConfig {
                         .title("삼삼오토 SITE Service API")
                         .description("SITE 서비스 REST API 문서")
                         .version("1.0.0"))
-                .servers(List.of( prodServer,localServer));
+                .servers(List.of(prodServer, localServer))
+                .components(new Components()
+                        .addSecuritySchemes("JWT", jwtScheme))
+                .addSecurityItem(jwtRequirement);
     }
 
 //    @Bean
